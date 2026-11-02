@@ -21,7 +21,7 @@ Secrets are copied with `wl-copy --sensitive`, so Klipper keeps them out of its 
 ## How it works
 
 - Match never reads secrets. On unlock (or when `last_sync` changes) the runner loads `rbw list --raw` right away, then reads `rbw get --raw` for every entry in the background (about 13 s for ~1300 entries) to index notes and custom fields. Fields of type `hidden`, passwords, TOTP secrets, and history are not kept.
-- The index lives in memory only and is dropped as soon as `rbw status` reports the vault locked.
+- The index lives in memory only and is dropped within a minute of the vault locking (it checks `rbw status` every 60 s, and on every query).
 - The background pass checks the lock state before each batch, so it never makes `rbw` pop a pinentry prompt.
 
 ## Install

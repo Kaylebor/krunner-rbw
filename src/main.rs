@@ -27,6 +27,7 @@ const PATH: &str = "/runner";
 const TRIGGER: &str = "bw";
 const MAX_RESULTS: usize = 15;
 const STATUS_TTL: Duration = Duration::from_millis(1500);
+const LOCK_POLL: Duration = Duration::from_secs(60);
 const INDEX_CONCURRENCY: usize = 4;
 
 const UNLOCK: &str = "rbw:unlock";
@@ -369,6 +370,12 @@ async fn main() -> zbus::Result<()> {
         .build()
         .await?;
     *runner.conn.lock().await = Some(conn);
-    std::future::pending::<()>().await;
-    Ok(())
+
+    // Drop the index soon after the agent auto-locks, even if KRunner is never opened.
+    loop {
+        tokio::time::sleep(LOCK_POLL).await;
+        if runner.vault.lock().await.loaded_for.is_some() {
+            runner.refresh(true).await;
+        }
+    }
 }

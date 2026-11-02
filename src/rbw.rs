@@ -15,6 +15,8 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 #[derive(Debug, Clone, Deserialize)]
 pub struct Status {
     #[serde(default)]
+    pub agent: bool,
+    #[serde(default)]
     pub logged_in: bool,
     #[serde(default = "yes")]
     pub locked: bool,
@@ -28,7 +30,7 @@ fn yes() -> bool {
 
 impl Default for Status {
     fn default() -> Self {
-        Status { logged_in: false, locked: true, last_sync: None }
+        Status { agent: false, logged_in: false, locked: true, last_sync: None }
     }
 }
 
@@ -135,7 +137,12 @@ pub async fn run_interactive(args: &[&str]) -> Result<(), String> {
 
 pub async fn status() -> Status {
     match run(&["status", "--json"]).await {
-        Ok(out) => serde_json::from_slice(&out).unwrap_or_default(),
+        Ok(out) => {
+            let mut st: Status = serde_json::from_slice(&out).unwrap_or_default();
+            // Without an agent any `list`/`get` would start one and prompt.
+            st.locked |= !st.agent;
+            st
+        }
         Err(_) => Status::default(),
     }
 }
