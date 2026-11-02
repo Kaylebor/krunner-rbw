@@ -13,6 +13,7 @@ pub struct Entry {
     pub user: Option<String>,
     pub folder: Option<String>,
     pub kind: String,
+    pub uris: Vec<String>,
     /// `None` until the full pass has looked at the entry.
     pub has_totp: Option<bool>,
     // Lowercased haystacks.
@@ -39,6 +40,7 @@ impl Entry {
             user: e.user,
             folder: e.folder,
             kind: e.kind,
+            uris: e.uris,
         }
     }
 
@@ -63,6 +65,21 @@ impl Entry {
 
     pub fn is_login(&self) -> bool {
         self.kind == "Login"
+    }
+
+    /// First stored URI a browser can open; bare hosts get `https://`.
+    pub fn website(&self) -> Option<String> {
+        self.uris.iter().find_map(|u| {
+            let u = u.trim();
+            match u.split_once("://") {
+                Some(("http" | "https", _)) => Some(u.to_string()),
+                Some(_) => None, // androidapp://, iosapp://, …
+                None if !u.is_empty() && !u.contains(char::is_whitespace) => {
+                    Some(format!("https://{u}"))
+                }
+                None => None,
+            }
+        })
     }
 }
 

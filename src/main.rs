@@ -37,7 +37,8 @@ const SYNC: &str = "rbw:sync";
 
 const ACT_USER: &str = "user";
 const ACT_TOTP: &str = "totp";
-const ACT_WEB: &str = "web";
+const ACT_SITE: &str = "site";
+const ACT_VAULT: &str = "vault";
 
 type Props = HashMap<String, Value<'static>>;
 type RemoteMatch = (String, String, String, i32, f64, Props);
@@ -177,13 +178,17 @@ impl Runner {
         }
     }
 
-    async fn open_web(&self, id: &str) {
+    async fn open_vault(&self, id: &str) {
         let cfg = rbw::config().await;
         let base = cfg
             .ui_url
             .or(cfg.base_url)
             .unwrap_or_else(|| "https://vault.bitwarden.com".into());
-        let url = format!("{}/#/vault?itemId={id}&action=view", base.trim_end_matches('/'));
+        self.open_url(format!("{}/#/vault?itemId={id}&action=view", base.trim_end_matches('/')))
+            .await
+    }
+
+    async fn open_url(&self, url: String) {
         let mut cmd = Command::new("xdg-open");
         cmd.arg(url);
         if let Some(token) = self.token.lock().await.take() {
@@ -222,12 +227,16 @@ impl Runner {
                 None => self.notify("No username", "This entry has none set").await,
             },
             ACT_TOTP => self.copy_rbw("One-time code", &["code", id]).await,
-            ACT_WEB => self.open_web(id).await,
+            ACT_SITE => match entry.website() {
+                Some(url) => self.open_url(url).await,
+                None => self.notify("No website", "This entry has no URL a browser can open").await,
+            },
+            ACT_VAULT => self.open_vault(id).await,
             _ if entry.is_login() => self.copy_rbw("Password", &["get", id]).await,
             _ if entry.kind == "Note" => {
                 self.copy_rbw("Note", &["get", "--field", "notes", id]).await
             }
-            _ => self.open_web(id).await,
+            _ => self.open_vault(id).await,
         }
     }
 }
@@ -272,7 +281,8 @@ impl Runner {
         [
             (ACT_USER, "Copy username", "user-identity"),
             (ACT_TOTP, "Copy one-time code", "chronometer"),
-            (ACT_WEB, "Open in web vault", "internet-web-browser"),
+            (ACT_SITE, "Open website", "internet-web-browser"),
+            (ACT_VAULT, "Open in web vault", "bitwarden"),
         ]
         .into_iter()
         .map(|(a, b, c)| (a.into(), b.into(), c.into()))
@@ -323,7 +333,10 @@ impl Runner {
                         actions.push(ACT_TOTP);
                     }
                 }
-                actions.push(ACT_WEB);
+                if e.website().is_some() {
+                    actions.push(ACT_SITE);
+                }
+                actions.push(ACT_VAULT);
                 (e.id.clone(), e.name.clone(), "bitwarden".into(), 50, hit.score, props(sub.join(" · "), &actions))
             })
             .collect()

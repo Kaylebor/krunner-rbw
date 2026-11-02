@@ -12,6 +12,7 @@ Type `bw <terms>` in KRunner. Every term must match somewhere: name, username, U
 | Enter               | Copy password (notes for secure notes; web vault for cards/identities) |
 | Copy username       | Copy login                               |
 | Copy one-time code  | `rbw code`                               |
+| Open website        | Opens the entry's first http(s) URL (bare hosts get `https://`) |
 | Open in web vault   | Opens the entry in your Bitwarden web vault |
 
 `bw` on its own offers **Sync** and **Lock**. While the vault is locked, the only result is **Unlock Bitwarden**, which runs `rbw unlock` (pinentry, PIN, or system auth, depending on your rbw config).
