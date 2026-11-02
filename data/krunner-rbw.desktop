@@ -6,6 +6,7 @@ Icon=bitwarden
 X-KDE-ServiceTypes=Plasma/Runner
 X-KDE-PluginInfo-Name=krunner-rbw
 X-KDE-PluginInfo-Version=0.1.0
+X-KDE-PluginInfo-License=MIT
 X-KDE-PluginInfo-EnabledByDefault=true
 X-Plasma-API=DBus2
 X-Plasma-DBusRunner-Service=local.krunner_rbw

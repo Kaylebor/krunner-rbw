@@ -36,3 +36,7 @@ just install
 This installs `~/.local/bin/krunner-rbw`, the plugin file in `~/.local/share/krunner/dbusplugins/`, and a D-Bus activation file, then restarts KRunner. The runner starts on demand. `just uninstall` removes everything.
 
 Logs: `journalctl --user -t krunner-rbw`.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
