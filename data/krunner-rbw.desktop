@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Bitwarden (rbw)
+Comment=Search your Bitwarden vault through rbw; type "bw <term>"
+Type=Service
+Icon=bitwarden
+X-KDE-ServiceTypes=Plasma/Runner
+X-KDE-PluginInfo-Name=krunner-rbw
+X-KDE-PluginInfo-Version=0.1.0
+X-KDE-PluginInfo-License=MIT
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API=DBus2
+X-Plasma-DBusRunner-Service=local.krunner_rbw
+X-Plasma-DBusRunner-Path=/runner
+X-Plasma-Request-Actions-Once=true
