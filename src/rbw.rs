@@ -3,6 +3,8 @@
 //! Secrets only pass through here when the user runs an action; matching
 //! works off metadata (`list --raw`) and the non-secret parts of `get --raw`.
 
+use std::collections::HashSet;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -11,6 +13,8 @@ use serde::Deserialize;
 use tokio::process::Command;
 
 const TIMEOUT: Duration = Duration::from_secs(15);
+/// For user-initiated reads, which may wait on a master-password re-prompt.
+pub const INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(180);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Status {
@@ -97,6 +101,10 @@ pub struct Config {
 
 /// Runs `rbw <args>` and returns stdout, or stderr as the error.
 pub async fn run(args: &[&str]) -> Result<Vec<u8>, String> {
+    run_timeout(args, TIMEOUT).await
+}
+
+pub async fn run_timeout(args: &[&str], timeout: Duration) -> Result<Vec<u8>, String> {
     let child = Command::new("rbw")
         .args(args)
         .stdin(Stdio::null())
@@ -105,7 +113,7 @@ pub async fn run(args: &[&str]) -> Result<Vec<u8>, String> {
         .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("failed to start rbw: {e}"))?;
-    let out = tokio::time::timeout(TIMEOUT, child.wait_with_output())
+    let out = tokio::time::timeout(timeout, child.wait_with_output())
         .await
         .map_err(|_| "rbw timed out".to_string())?
         .map_err(|e| e.to_string())?;
@@ -133,6 +141,56 @@ pub async fn run_interactive(args: &[&str]) -> Result<(), String> {
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
+}
+
+/// IDs of entries with "master password re-prompt" enabled. The agent asks
+/// for the master password whenever one of their secrets is decrypted, so the
+/// background index must not touch them. The flag is stored unencrypted in
+/// rbw's sync database; we read every account's database in the profile's
+/// cache dir (IDs are UUIDs, so merging is safe).
+pub fn reprompt_ids() -> Result<HashSet<String>, String> {
+    #[derive(Deserialize)]
+    struct Db {
+        entries: Vec<DbEntry>,
+    }
+    #[derive(Deserialize)]
+    struct DbEntry {
+        id: String,
+        #[serde(default)]
+        master_password_reprompt: serde_json::Value,
+    }
+
+    let cache = std::env::var_os("XDG_CACHE_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+        .ok_or("no cache dir")?;
+    let profile = match std::env::var("RBW_PROFILE") {
+        Ok(p) if !p.is_empty() => format!("rbw-{p}"),
+        _ => "rbw".into(),
+    };
+    let dir = cache.join(profile);
+
+    let mut ids = HashSet::new();
+    let mut found = false;
+    for f in std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))? {
+        let path = f.map_err(|e| e.to_string())?.path();
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
+        }
+        let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let db: Db = serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        found = true;
+        ids.extend(db.entries.into_iter().filter_map(|e| {
+            let on = match e.master_password_reprompt {
+                serde_json::Value::Number(n) => n.as_u64() != Some(0),
+                serde_json::Value::Bool(b) => b,
+                _ => false,
+            };
+            on.then_some(e.id)
+        }));
+    }
+    if found { Ok(ids) } else { Err(format!("no rbw database in {}", dir.display())) }
 }
 
 pub async fn status() -> Status {

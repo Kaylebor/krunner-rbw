@@ -14,6 +14,8 @@ pub struct Entry {
     pub folder: Option<String>,
     pub kind: String,
     pub uris: Vec<String>,
+    /// Master password re-prompt is on; never read in the background.
+    pub reprompt: bool,
     /// `None` until the full pass has looked at the entry.
     pub has_totp: Option<bool>,
     // Lowercased haystacks.
@@ -35,6 +37,7 @@ impl Entry {
             notes_l: String::new(),
             fields_l: Vec::new(),
             has_totp: None,
+            reprompt: false,
             id: e.id,
             name: e.name,
             user: e.user,

@@ -114,8 +114,19 @@ impl Runner {
                 v.loaded_for = Some(status.last_sync);
                 v.indexed = false;
                 v.generation += 1;
-                let ids: Vec<String> = v.entries.iter().map(|e| e.id.clone()).collect();
-                tokio::spawn(self.clone().index_full(v.generation, ids));
+                // Without the re-prompt list we can't tell which `get`s would
+                // prompt, so skip the background pass rather than risk it.
+                match rbw::reprompt_ids() {
+                    Ok(reprompt) => {
+                        for e in &mut v.entries {
+                            e.reprompt = reprompt.contains(&e.id);
+                        }
+                        let ids: Vec<String> =
+                            v.entries.iter().filter(|e| !e.reprompt).map(|e| e.id.clone()).collect();
+                        tokio::spawn(self.clone().index_full(v.generation, ids));
+                    }
+                    Err(e) => eprintln!("not indexing notes/fields: can't read re-prompt flags: {e}"),
+                }
             }
             Err(e) => eprintln!("rbw list failed: {e}"),
         }
@@ -163,7 +174,7 @@ impl Runner {
     }
 
     async fn copy_rbw(&self, what: &str, args: &[&str]) {
-        match rbw::run(args).await {
+        match rbw::run_timeout(args, rbw::INTERACTIVE_TIMEOUT).await {
             Ok(out) if out.iter().all(u8::is_ascii_whitespace) => {
                 self.notify(&format!("No {what}"), "This entry has none set").await
             }
@@ -320,6 +331,9 @@ impl Runner {
                 sub.extend(e.folder.clone());
                 if e.user.is_none() && e.folder.is_none() {
                     sub.push(e.kind.clone());
+                }
+                if e.reprompt {
+                    sub.push("asks for master password".into());
                 }
                 if let Some(via) = hit.via {
                     sub.push(format!("matched in {via}"));
